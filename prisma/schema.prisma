@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   Int          @id @default(autoincrement())
+  email                String       @unique
+  password             String
+  createdAt            DateTime     @default(now())
+  confirmationToken    String?
+  isConfirmed          Boolean      @default(false)
+  updatedAt            DateTime     @updatedAt
+  CNIC                 String       @unique
+  age                  Int
+  firstName            String
+  gender               String
+  lastName             String
+  role                 String       @default("STUDENT")
+  verificationCode     String?
+  resetPasswordExpires DateTime?
+  resetPasswordToken   String?
+  profilePicture       String?
+  classes              Class[]      @relation("TeacherClasses")
+  enrolledClasses      Enrollment[] @relation("StudentEnrollments")
+  Stream               Stream[]
+  submissions          Submission[] @relation("StudentSubmissions")
+  assignmentResults    AssignmentResult[] // ✅ Added opposite relation
+   forumPosts           ForumPost[]  @relation("UserForumPosts")
+  forumReplies         ForumReply[] @relation("UserForumReplies")
+   sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+}
+
+model Class {
+  id            Int            @id @default(autoincrement())
+  name          String
+  section       String?
+  subject       String?
+  room          String?
+  classCode     String         @unique
+  createdAt     DateTime       @default(now())
+  teacherId     Int
+  announcements Announcement[]
+  assignments   Assignment[]
+  activities    Activity[]     // ✅ Added relation to Activity
+  materials     Material[]     // ✅ Added relation to Material
+  teacher       User           @relation("TeacherClasses", fields: [teacherId], references: [id])
+  enrollments   Enrollment[]   @relation("ClassEnrollments")
+  Stream        Stream[]
+}
+
+model Enrollment {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  classId   Int
+  createdAt DateTime @default(now())
+  class     Class    @relation("ClassEnrollments", fields: [classId], references: [id])
+  student   User     @relation("StudentEnrollments", fields: [studentId], references: [id])
+}
+
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  text      String
+  createdAt DateTime @default(now())
+  classId   Int
+  class     Class    @relation(fields: [classId], references: [id])
+}
+
+model Material {
+  id         Int      @id @default(autoincrement())
+  title      String
+  fileUrl    String
+  createdAt  DateTime @default(now())
+  classId    Int
+  class      Class    @relation(fields: [classId], references: [id])
+  Stream     Stream?
+}
+
+model Activity {
+  id         Int      @id @default(autoincrement())
+  title      String
+  description String?
+  createdAt  DateTime @default(now())
+  classId    Int
+  class      Class    @relation(fields: [classId], references: [id])
+  Stream     Stream?
+}
+
+model Assignment {
+  id          Int          @id @default(autoincrement())
+  title       String
+  description String
+  dueDate     DateTime
+  classId     Int
+  createdAt   DateTime     @default(now())
+  fileUrl     String?
+  class       Class        @relation(fields: [classId], references: [id])
+  Stream      Stream?
+  submissions Submission[] @relation("AssignmentSubmissions")
+  testCases   TestCase[]    @relation("AssignmentTestCases") 
+  assignmentResults    AssignmentResult[] // ✅ Added opposite relation
+}
+
+model Submission {
+  id           Int        @id @default(autoincrement())
+  studentId    Int
+  assignmentId Int
+  fileUrl      String
+  questionNumber Int
+  submittedAt  DateTime   @default(now())
+  checked      Boolean  @default(false) // ✅ Add this line
+  assignment   Assignment @relation("AssignmentSubmissions", fields: [assignmentId], references: [id])
+  student      User       @relation("StudentSubmissions", fields: [studentId], references: [id])
+  sourcecode  String
+ // ✅ One-to-One relation with PlagiarismCheck
+  plagiarismCheck PlagiarismCheck?
+  
+
+}
+model PlagiarismCheck {
+  id                Int        @id @default(autoincrement())
+  submissionId      Int        @unique
+  plagiarismScore   Float?
+  plagiarismReport  String?
+  checkedAt         DateTime   @default(now())
+  passed            Boolean    @default(true)
+
+  submission        Submission @relation(fields: [submissionId], references: [id])
+}
+model Stream {
+  id           Int         @id @default(autoincrement())
+  classId      Int
+  type         String
+  title        String
+  description  String?
+  fileUrl      String?
+  assignmentId Int?        @unique
+  materialId   Int?        @unique  // NEW: Link to Material
+  activityId   Int?        @unique  // NEW: Link to Activity
+  createdAt    DateTime    @default(now())
+  userId       Int
+  Assignment   Assignment? @relation(fields: [assignmentId], references: [id])
+  Material     Material?   @relation(fields: [materialId], references: [id])
+  Activity     Activity?   @relation(fields: [activityId], references: [id])
+  Class        Class       @relation(fields: [classId], references: [id])
+  User         User        @relation(fields: [userId], references: [id])
+}
+model TestCase {
+  id             Int    @id @default(autoincrement())
+  assignmentId   Int
+  questionNumber Int    // NEW: To specify the question number within the assignment
+  input          String
+  expectedOutput String
+  assignment     Assignment @relation(fields: [assignmentId], references: [id], name: "AssignmentTestCases")
+}
+
+model Evaluation {
+  id           Int    @id @default(autoincrement())
+  studentId    Int
+  assignmentId Int
+  results      String
+   // ✅ **NEW**: Stores plagiarism check status
+  plagiarismPassed Boolean? @default(true)  // Whether plagiarism was detected or not
+}
+model AssignmentResult {
+  id             Int      @id @default(autoincrement())
+  studentId      Int
+  assignmentId   Int
+  score          Float   // ✅ Percentage score
+  grade          String  // ✅ Letter grade (A, B, C, etc.)
+  
+
+  // ✅ Relationships
+  student     User        @relation(fields: [studentId], references: [id])
+  assignment  Assignment  @relation(fields: [assignmentId], references: [id])
+
+  @@unique([studentId, assignmentId]) // ✅ Prevent multiple results for the same assignment
+}
+model ForumPost {
+  id        Int          @id @default(autoincrement())
+  text      String
+  createdAt DateTime     @default(now())
+  userId    Int
+  user      User         @relation("UserForumPosts", fields: [userId], references: [id])
+  replies   ForumReply[]
+}
+
+model ForumReply {
+  id        Int       @id @default(autoincrement())
+  text      String
+  createdAt DateTime  @default(now())
+  userId    Int
+  user      User      @relation("UserForumReplies", fields: [userId], references: [id])
+  postId    Int
+  post      ForumPost @relation(fields: [postId], references: [id])
+}
+model Message {
+  id          Int      @id @default(autoincrement())
+  senderId    Int
+  receiverId  Int
+  content     String
+  createdAt   DateTime @default(now())
+  
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+}
